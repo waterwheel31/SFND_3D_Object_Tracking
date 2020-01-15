@@ -1,4 +1,5 @@
 
+
 #include <iostream>
 #include <algorithm>
 #include <numeric>
@@ -133,7 +134,11 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+   for (auto match : kptMatches) {
+        if (boundingBox.roi.contains(kptsCurr[match.trainIdx].pt)) {
+            boundingBox.kptMatches.push_back(match);
+        }
+    }
 }
 
 
@@ -141,18 +146,117 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
 {
-    // ...
+    
+    vector<double> h1h0s; 
+
+    // see the distances of all kay points combinations 
+    for (auto match1 = kptMatches.begin(); match1 != kptMatches.end()- 1; ++match1  ){ 
+       
+        cv::KeyPoint point1_curr = kptsCurr.at(match1->trainIdx);
+        cv::KeyPoint point1_prev = kptsPrev.at(match1->queryIdx);
+
+        for (auto match2 = kptMatches.begin() + 1; match2 != kptMatches.end() ; ++match2 ){
+
+            cv::KeyPoint point2_curr = kptsCurr.at(match2->trainIdx);
+            cv::KeyPoint point2_prev = kptsPrev.at(match2->queryIdx);
+
+            double d_curr = cv::norm(point1_curr.pt - point2_curr.pt);
+            double d_prev = cv::norm(point1_prev.pt - point2_prev.pt);
+
+            if(d_prev > 0){ 
+                h1h0s.push_back(d_curr / d_prev);    // h1/h0 = d1/d0 
+            }
+
+        }
+
+    }
+
+
+    // sort the value so that it ipossible to get the medium value to remove the impact of outliers 
+    std::sort(h1h0s.begin(), h1h0s.end()); 
+
+    double h1h0 = h1h0s[h1h0s.size()/2];  
+    double dt = 1 / frameRate; 
+
+    TTC = -dt / (1 - h1h0); 
+
 }
 
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    // ...
+    
+    // Sort points by distance (x) so that it is possible to get median value to remove the impact of outliers 
+    std::sort(lidarPointsPrev.begin(), lidarPointsPrev.end(), [](LidarPoint a, LidarPoint b){
+        return a.x < b.x;
+    });
+    std::sort(lidarPointsCurr.begin(), lidarPointsCurr.end(), [](LidarPoint a, LidarPoint b){
+        return a.x < b.x;
+    });
+
+    // take median value to remove the impact of outliers  
+    double d0 = lidarPointsPrev[lidarPointsPrev.size()/2].x; 
+    double d1 = lidarPointsPrev[lidarPointsCurr.size()/2].x; 
+    
+    double dt = 1.0 / frameRate; 
+
+    TTC = d1  * dt / (d0 -d1);
+
 }
 
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
     // ...
+    int prev_counts = prevFrame.boundingBoxes.size();
+    int curr_counts = currFrame.boundingBoxes.size(); 
+
+    //std::cout << "previous bounding boxes: " << prev_num  << " current boxes: " << curr_num << std::endl; 
+
+    int pt_counts[prev_counts][curr_counts] = {};
+
+    for (auto match : matches){
+        
+        cv::KeyPoint kp_prev = prevFrame.keypoints[match.queryIdx];
+        cv::KeyPoint kp_curr = currFrame.keypoints[match.trainIdx];
+    
+        std::vector<int> ids_prev, ids_curr; 
+
+        for (auto bbox : prevFrame.boundingBoxes){
+            if (bbox.roi.contains(kp_prev.pt)){
+                ids_prev.push_back(bbox.boxID);
+            }
+        }
+        for (auto bbox : currFrame.boundingBoxes){
+            if (bbox.roi.contains(kp_curr.pt)){
+                ids_curr.push_back(bbox.boxID);
+            }
+        }
+
+        if (ids_prev.size() > 0 && ids_curr.size() > 0){
+            for (auto id_prev : ids_prev){
+                for (auto id_curr : ids_curr){
+                    pt_counts[id_prev][id_curr] += 1; 
+                }
+            }
+        }
+
+    }
+
+    for (int i; i < prev_counts; i++){
+
+        int count_max = 0;
+        int id_max =0;
+
+        for (int j = 0; j < curr_counts ; j++){
+            if (pt_counts[i][j] > count_max){
+                 count_max = pt_counts[i][j];
+                 id_max = j;
+            }
+
+        }
+        bbBestMatches[i] = id_max;
+    }
 }
+

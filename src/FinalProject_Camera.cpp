@@ -72,7 +72,7 @@ int main(int argc, const char *argv[])
     double sensorFrameRate = 10.0 / imgStepWidth; // frames per second for Lidar and camera
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = false;            // visualize results
+    bool bVis = true; //false           // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -87,13 +87,14 @@ int main(int argc, const char *argv[])
 
         // load image from file 
         cv::Mat img = cv::imread(imgFullFilename);
+        //cv::imshow("image", img); 
 
         // push image into data frame buffer
         DataFrame frame;
         frame.cameraImg = img;
         dataBuffer.push_back(frame);
 
-        cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
+        cout << "#1 : LOAD IMAGE INTO BUFFER done. File name: " << imgFullFilename  <<  endl;
 
 
         /* DETECT & CLASSIFY OBJECTS */
@@ -140,7 +141,7 @@ int main(int argc, const char *argv[])
         
         
         // REMOVE THIS LINE BEFORE PROCEEDING WITH THE FINAL PROJECT
-        continue; // skips directly to the next image without processing what comes beneath
+        // continue; // skips directly to the next image without processing what comes beneath
 
         /* DETECT IMAGE KEYPOINTS */
 
