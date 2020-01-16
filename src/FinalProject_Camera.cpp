@@ -35,7 +35,7 @@ int main(int argc, const char *argv[])
     string imgPrefix = "KITTI/2011_09_26/image_02/data/000000"; // left camera, color
     string imgFileType = ".png";
     int imgStartIndex = 0; // first file index to load (assumes Lidar and camera names have identical naming convention)
-    int imgEndIndex = 18;   // last file index to load
+    int imgEndIndex = 2;   // last file index to load , default = 18
     int imgStepWidth = 1; 
     int imgFillWidth = 4;  // no. of digits which make up the file index (e.g. img-0001.png)
 
@@ -72,7 +72,7 @@ int main(int argc, const char *argv[])
     double sensorFrameRate = 10.0 / imgStepWidth; // frames per second for Lidar and camera
     int dataBufferSize = 2;       // no. of images which are held in memory (ring buffer) at the same time
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
-    bool bVis = true; //false           // visualize results
+    bool bVis = false; //false           // visualize results
 
     /* MAIN LOOP OVER ALL IMAGES */
 
@@ -115,6 +115,7 @@ int main(int argc, const char *argv[])
         loadLidarFromFile(lidarPoints, lidarFullFilename);
 
         // remove Lidar points based on distance properties
+       // float minZ = -1.5, maxZ = -0.9, minX = 2.0, maxX = 20.0, maxY = 2.0, minR = 0.1; // focus on ego lane
         float minZ = -1.5, maxZ = -0.9, minX = 2.0, maxX = 20.0, maxY = 2.0, minR = 0.1; // focus on ego lane
         cropLidarPoints(lidarPoints, minX, maxX, maxY, minZ, maxZ, minR);
     
@@ -133,7 +134,7 @@ int main(int argc, const char *argv[])
         bVis = true;
         if(bVis)
         {
-            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(2000, 2000), true);
+            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(800, 800), true);   // cv::Size(400, 400)
         }
         bVis = false;
 
@@ -151,11 +152,35 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
+        // string detectorType = "SHITOMASI";
+        string detectorType = "HARRIS";
+        // string detectorType = "FAST";
+        //  string detectorType = "BRISK";
+        // string detectorType = "ORB";
+        //  string detectorType = "AKAZE";
+        //  string detectorType = "SIFT";
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
-            detKeypointsShiTomasi(keypoints, imgGray, false);
+            detKeypointsShiTomasi(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("HARRIS") == 0){
+            detKeypointsHarris(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("FAST") == 0){
+            detKeypointsFAST(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("BRISK") == 0){
+            detKeypointsBRISK(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("ORB") == 0){
+            detKeypointsORB(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("AKAZE") == 0){
+            detKeypointsAKAZE(keypoints, imgGray, true);
+        }
+        else if (detectorType.compare("SIFT") == 0){
+            detKeypointsSIFT(keypoints, imgGray, true);
         }
         else
         {
@@ -179,19 +204,21 @@ int main(int argc, const char *argv[])
         // push keypoints and descriptor for current frame to end of data buffer
         (dataBuffer.end() - 1)->keypoints = keypoints;
 
-        cout << "#5 : DETECT KEYPOINTS done" << endl;
+        cout << "#5 : DETECT KEYPOINTS done" << " -> number of key points is: " << keypoints.size() <<  endl;
 
 
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         cv::Mat descriptors;
         string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+
+
         descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
 
         // push descriptors for current frame to end of data buffer
         (dataBuffer.end() - 1)->descriptors = descriptors;
 
-        cout << "#6 : EXTRACT DESCRIPTORS done" << endl;
+        cout << "#6 : EXTRACT DESCRIPTORS done" << " -> size of descriptors is:" << descriptors.size() <<  endl;
 
 
         if (dataBuffer.size() > 1) // wait until at least two images have been processed
@@ -201,7 +228,11 @@ int main(int argc, const char *argv[])
 
             vector<cv::DMatch> matches;
             string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
+            if (descriptorType.compare("SIFT")==0){
+                 descriptorType = "DES_HOG"; 
+            } else {
+                 descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
+            }
             string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
 
             matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
@@ -211,7 +242,7 @@ int main(int argc, const char *argv[])
             // store matches in current data frame
             (dataBuffer.end() - 1)->kptMatches = matches;
 
-            cout << "#7 : MATCH KEYPOINT DESCRIPTORS done" << endl;
+            cout << "#7 : MATCH KEYPOINT DESCRIPTORS done" << " -> number of matches is:" << matches.size() <<  endl;
 
             
             /* TRACK 3D OBJECT BOUNDING BOXES */
@@ -225,7 +256,7 @@ int main(int argc, const char *argv[])
             // store matches in current data frame
             (dataBuffer.end()-1)->bbMatches = bbBestMatches;
 
-            cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << endl;
+            cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << " -> number of bounding boxes is: " << bbBestMatches.size() <<  endl;
 
 
             /* COMPUTE TTC ON OBJECT IN FRONT */

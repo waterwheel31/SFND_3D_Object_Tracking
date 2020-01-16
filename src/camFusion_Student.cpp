@@ -134,13 +134,37 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-   for (auto match : kptMatches) {
-        if (boundingBox.roi.contains(kptsCurr[match.trainIdx].pt)) {
-            boundingBox.kptMatches.push_back(match);
+ 
+    std::vector<cv::DMatch>  kptMatches_roi;
+
+    for (auto match : kptMatches){
+        cv::KeyPoint kp = kptsCurr.at(match.trainIdx);
+        if (boundingBox.roi.contains(kp.pt)){
+            kptMatches_roi.push_back(match);
         }
     }
-}
 
+    double d_ave = 0;
+    for (auto match_roi : kptMatches_roi){
+        d_ave += match_roi.distance; 
+    }
+    if (kptMatches_roi.size() > 0)
+         d_ave = d_ave/kptMatches_roi.size();
+    else return;
+
+    double th = d_ave * 0.8;
+    
+    for (auto match_roi : kptMatches_roi){
+        if(match_roi.distance < th){
+            boundingBox.kptMatches.push_back(match_roi);
+        }
+    }
+
+    std::cout << "number of keypoint matches: " << boundingBox.kptMatches.size()   << std::endl;
+
+
+
+}
 
 // Compute time-to-collision (TTC) based on keypoint correspondences in successive images
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
@@ -160,25 +184,30 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
             cv::KeyPoint point2_curr = kptsCurr.at(match2->trainIdx);
             cv::KeyPoint point2_prev = kptsPrev.at(match2->queryIdx);
 
-            double d_curr = cv::norm(point1_curr.pt - point2_curr.pt);
-            double d_prev = cv::norm(point1_prev.pt - point2_prev.pt);
+            double h1 = cv::norm(point1_curr.pt - point2_curr.pt);
+            double h0 = cv::norm(point1_prev.pt - point2_prev.pt);
 
-            if(d_prev > 0){ 
-                h1h0s.push_back(d_curr / d_prev);    // h1/h0 = d1/d0 
+            double h_min = 100;  // threshold to make the result stable
+
+            if(h0 > 0 && h1 > h_min && h0 > h_min){ 
+                h1h0s.push_back(h1 / h0);   
             }
 
         }
 
     }
 
-
     // sort the value so that it ipossible to get the medium value to remove the impact of outliers 
     std::sort(h1h0s.begin(), h1h0s.end()); 
+    std::cout << "number of h1h0s: " << h1h0s.size() <<  " h1h0s.size()/2: " << h1h0s.size()/2 <<  std::endl;
 
     double h1h0 = h1h0s[h1h0s.size()/2];  
     double dt = 1 / frameRate; 
 
-    TTC = -dt / (1 - h1h0); 
+    TTC = - dt / (1 - h1h0); 
+
+    std::cout << "Camera Results>  dt:" << dt << "  h1h0: " <<  h1h0 << "  frameRate: " << frameRate << "  TTC:" << TTC << std::endl;
+
 
 }
 
@@ -197,11 +226,13 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 
     // take median value to remove the impact of outliers  
     double d0 = lidarPointsPrev[lidarPointsPrev.size()/2].x; 
-    double d1 = lidarPointsPrev[lidarPointsCurr.size()/2].x; 
+    double d1 = lidarPointsCurr[lidarPointsCurr.size()/2].x; 
     
     double dt = 1.0 / frameRate; 
 
-    TTC = d1  * dt / (d0 -d1);
+    TTC = d1  * dt / (d0 - d1);
+
+    std::cout << "Lidar Results>  d0:" << d0 << "  d1: " <<  d1 << "  frameRate: " << frameRate << "  TTC:" << TTC << std::endl;
 
 }
 
@@ -212,9 +243,9 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
     int prev_counts = prevFrame.boundingBoxes.size();
     int curr_counts = currFrame.boundingBoxes.size(); 
 
-    //std::cout << "previous bounding boxes: " << prev_num  << " current boxes: " << curr_num << std::endl; 
+    //std::cout << "previous bounding boxes: " << prev_counts  << " current boxes: " << curr_counts << " matches length: " << matches.size() <<  std::endl; 
 
-    int pt_counts[prev_counts][curr_counts] = {};
+    int pt_counts[prev_counts][curr_counts] = {0};
 
     for (auto match : matches){
         
@@ -234,9 +265,12 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
             }
         }
 
+        //std::cout << "size of id_prev: " << ids_prev.size() << " size of id_curr: " << ids_curr.size() << std::endl; 
+
         if (ids_prev.size() > 0 && ids_curr.size() > 0){
-            for (auto id_prev : ids_prev){
-                for (auto id_curr : ids_curr){
+            for (int id_prev : ids_prev){
+                for (int id_curr : ids_curr){
+                    //std::cout << "id_curr: " << id_curr  << std::endl;
                     pt_counts[id_prev][id_curr] += 1; 
                 }
             }
@@ -244,7 +278,19 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
 
     }
 
-    for (int i; i < prev_counts; i++){
+    /*
+    std::cout << "checking the matrix" << std::endl; 
+    for (int i = 0; i < sizeof(pt_counts)/sizeof(*pt_counts);  i++ ){
+        for (int j = 0; j < sizeof(pt_counts[i])/sizeof(int);  j++ ){
+             std::cout << pt_counts[i][j] << " "; 
+        }
+        std::cout << endl; 
+    }
+    */
+
+
+
+    for (int i = 0; i < prev_counts; i++){
 
         int count_max = 0;
         int id_max =0;
@@ -256,7 +302,12 @@ void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bb
             }
 
         }
+        // std::cout << "id_max: " << id_max << std::endl; 
+
         bbBestMatches[i] = id_max;
     }
+
+    std::cout << "bbBestMatches.size(): " << bbBestMatches.size() << std::endl; 
+
 }
 

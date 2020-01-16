@@ -33,3 +33,50 @@ In this final project, you will implement the missing parts in the schematic. To
 2. Make a build directory in the top level project directory: `mkdir build && cd build`
 3. Compile: `cmake .. && make`
 4. Run it: `./3D_object_tracking`.
+
+
+# Results
+
+## Screenshot 
+
+<img src="screenshot3d.png"  />
+
+
+## Performance Evaluation 
+
+### Evaluation 1
+
+Followings are the TTC from Lidar, for the first 18 frames. There is no problem found, and the results are stable. 
+
+- d0:8.074  d1: 8.01  frameRate: 10  TTC:12.5156
+- d0:8.01  d1: 7.947  frameRate: 10  TTC:12.6142
+- d0:7.947  d1: 7.891  frameRate: 10  TTC:14.091
+- d0:7.891  d1: 7.844  frameRate: 10  TTC:16.6894
+- d0:7.844  d1: 7.795  frameRate: 10  TTC:15.9082
+- d0:7.795  d1: 7.734  frameRate: 10  TTC:12.6787
+- d0:7.734  d1: 7.67  frameRate: 10  TTC:11.9844
+- d0:7.67  d1: 7.612  frameRate: 10  TTC:13.1241
+- d0:7.612  d1: 7.554  frameRate: 10  TTC:13.0241
+- d0:7.554  d1: 7.487  frameRate: 10  TTC:11.1746
+- d0:7.487  d1: 7.429  frameRate: 10  TTC:12.8086
+- d0:7.429  d1: 7.347  frameRate: 10  TTC:8.95978
+- d0:7.347  d1: 7.274  frameRate: 10  TTC:9.96439
+- d0:7.274  d1: 7.199  frameRate: 10  TTC:9.59863
+- d0:7.199  d1: 7.116  frameRate: 10  TTC:8.57352
+- d0:7.116  d1: 7.042  frameRate: 10  TTC:9.51617
+- d0:7.042  d1: 6.969  frameRate: 10  TTC:9.54658
+- d0:6.969  d1: 6.887  frameRate: 10  TTC:8.3988
+
+### Evaluation 2
+
+Followings is the result of Camera TTC, using the first and second frames. 
+Seeing from this, it is found that Camera TTC results are generally close to the TTC results of Lidar. 
+There seems to be difference of performance between detectors. As a initial understandings from this limited samples, it can be found that FAST/BRISK/ORB detectors work well, while HARRIS's performance is not good (tends to calculate shorter TTC)
+ 
+
+
+<img src="result3d.png"  />
+
+
+
+
